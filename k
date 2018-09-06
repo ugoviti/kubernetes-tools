@@ -9,17 +9,20 @@ ver="20180805"
 # copy this script into ~/bin/kutil and run:
 # cd ~/bin && chmod 755 kutil && for file in klog ktop kbash ktail kdesc ; do ln -s kutil $file; done
 
-kubeutil=$(basename $0)
+izk="$1"
+shift
+options="$@"
 
 kubecmd() {
  local pod=$1
- case $kubeutil in
-	 kbash) [ -z "$opts" ] && opts="/bin/sh" ; echo "kubectl $args exec -it $pod $([ ! -z "$container" ] && echo "-c $container") -- $opts" ;;
-	 kdesc) echo "kubectl $args describe pod $pod $follow $opts | less" ;;
-	 klog)  [ -z "$podnumber" ] && follow="-f" ;  echo "kubectl $args logs $pod $container $follow $opts" ;;
-	 ktail) echo "kubectl $args exec -it $pod $([ ! -z "$container" ] && echo "-c $container") -- tail -f $opts" ;;
-	 ktop)  [ -z "$podnumber" ] && opts+="" ; echo "kubectl $args exec -it $pod $([ ! -z "$container" ] && echo "-c $container") -- top $opts" ;;
-	 #ktop)  [ -z "$podnumber" ] && opts+="-bn 1" ; echo "kubectl $args exec -it $pod -c $container -- top $opts" ;; # top args test
+ case $izk in
+	 sh) [ -z "$opts" ] && opts="/bin/sh" ; echo "kubectl $args exec -it $pod $([ ! -z "$container" ] && echo "-c $container") -- $opts" ;;
+	 del) echo "kubectl $args delete pod $pod $opts" ;;
+	 desc) echo "kubectl $args describe pod $pod $follow $opts | less" ;;
+	 log)  [ -z "$podnumber" ] && follow="-f" ;  echo "kubectl $args logs $pod $container $follow $opts" ;;
+	 tail) echo "kubectl $args exec -it $pod $([ ! -z "$container" ] && echo "-c $container") -- tail -f $opts" ;;
+	 top)  [ -z "$podnumber" ] && opts+="" ; echo "kubectl $args exec -it $pod $([ ! -z "$container" ] && echo "-c $container") -- top $opts" ;;
+	 #top)  [ -z "$podnumber" ] && opts+="-bn 1" ; echo "kubectl $args exec -it $pod -c $container -- top $opts" ;; # top args test
  esac
 }
 
@@ -31,7 +34,7 @@ kubemulti() {
 	# test: list containers in a pod
 	# kubectl -n test get pods $pod -o jsonpath='{.spec.containers[*].name}' | cut -d " " -f 1
 
-	case $kubeutil in
+	case $izk in
 		#ktop)  kubecmd+=" \; split-window \"$(kubecmd $pod)\"" ;; # tmux test
 		kbash|ktop) kubecmd+=" \"$(kubecmd $pod)\"" ;;
 		#kdesc)  kubecmd+=" -r 120 -l \"$(kubecmd $pod)\"" ;;
@@ -60,30 +63,30 @@ main() {
 if   [[ ${#pods[@]} -eq 0 ]]; then
 	print_pod_not_founds
 elif [[ -z "$podnumber" && ${#pods[@]} -gt 1 ]]; then
-	case $kubeutil in
-		kbash)
+	case $izk in
+		sh)
 			#echo "specify the pod number you want to connect (total active $container pods: ${#pods[@]})"
 			#exit 1
 			eval "dvtm $(kubemulti)"
 			;;
-		kdesc)
+		desc)
 			#eval "multitail -s 2 -r 120 -l $(kubemulti)"
 			eval "dvtm $(kubemulti)"
 			;;
-		ktop)
+		top)
 			#eval "tmux new-session -d $(kubemulti) \; attach"
 			eval "dvtm $(kubemulti)"
 			;;
-		klog)
+		log)
 			eval "multitail -s 2 -l $(kubemulti)"
 			;;
-		ktail)
+		tail)
 			[ -z "$opts" ] && echo "ERROR: specify remote log file to tail" && exit 1
 			eval "multitail -s 2 -l $(kubemulti)"
 			;;
 
-		kusage)
-			kusage
+		res)
+			kres
 			;;
 	esac	
 else
@@ -97,7 +100,43 @@ else
 fi
 }
 
-kusage() {
+kres() {
+	kubectl get nodes --no-headers | awk '{print $1}' | xargs -I {} sh -c 'echo {} ; kubectl describe node {} | grep Allocated -A 5 | grep -ve Event -ve Allocated -ve percent -ve -- ; echo '
+}
+
+# not working
+kcpu() {
+	kres | grep % | awk '{print $1}' | awk '{ sum += $1 } END { if (NR > 0) { print sum/(NR*20), "%\n" } }'
+}
+
+# not working
+kmem() {
+	kres | grep % | awk '{print $5}' | awk '{ sum += $1 } END { if (NR > 0) { print sum/(NR*75), "%\n" } }'
+}
+
+
+# not working
+kimages() {
+	#kubectl get pods --all-namespaces -o jsonpath="{..image}" |tr -s '[[:space:]]' '\n' | sort | uniq -c | sort -k2
+	#kubectl get pods --all-namespaces -o jsonpath='{range .items[*]}{"\n"}{.metadata.name}{":\t"}{range .spec.containers[*]}{.image}{", "}{end}{end}' |sort | column -c1 -t | sort -k2
+	kubectl get pods --all-namespaces -o go-template --template="{{range .items}}{{.metadata.name}} {{.metadata.namespace}} {{range .spec.containers}}{{.image}} {{end}};{{end}}" | tr -s ';' '\n' | grep -v kube-system | column -c1 -t | sort -k3
+}
+
+
+# not working
+kres3() {
+set -euo pipefail
+nodes=$(kubectl get node --no-headers -o custom-columns=NAME:.metadata.name)
+
+for node in $nodes; do
+  echo "Node: $node"
+  kubectl describe node "$node" | sed '1,/Non-terminated Pods/d'
+  echo
+done
+}
+
+# not working
+kres2() {
 	set -e
 	local node_count=0
 	local total_percent_cpu=0
@@ -126,11 +165,15 @@ kusage() {
 #################### default program menu and arguments validations
 # command prompt menu
 usage(){
-  echo "$kubeutil - $desc
+  echo "usage: $izk <sh|top|log|res|cpu|mem|img> [options]"
+}
+
+help(){
+  echo "izk - $desc
 Written by Ugo Viti <ugo.viti@initzero.it>
 version: $ver
 
-usage: $kubeutil [options]
+$(usage)
 
 Option:  Argument:           Description:
 --------------------------------------------------------------------------------
@@ -151,17 +194,25 @@ NO_ARGS=0
 E_OPTERROR=65
 
 # if not command args, then connect to the cluster nodes
-if [ $# -eq "$NO_ARGS" ]  # Script invoked with no command-line args?
+if [[ $# -eq "$NO_ARGS" && -z "$izk" ]]  # Script invoked with no command-line args?
  then
-  case $(basename $0) in
-	  kbash) eval DVTM_TERM=rxvt dvtm $(kubectl get nodes | grep -v ^NAME | cut -d " " -f 1 | while read node ; do echo -n "\"gcloud compute ssh $node\" "; done) && exit 0 ;;
-	  ktop) eval DVTM_TERM=rxvt dvtm $(kubectl get nodes | grep -v ^NAME | cut -d " " -f 1 | while read node ; do echo -n "\"gcloud compute ssh $node -- top\" "; done) && exit 0 ;;
-	  klog) eval DVTM_TERM=rxvt dvtm $(kubectl get nodes | grep -v ^NAME | cut -d " " -f 1 | while read node ; do echo -n "\"gcloud compute ssh $node -- sudo journalctl -f -u kubelet | grep -v -e \"/stats/summary/:\" -e \"/healthz:\" -e \"Discovered runtime cgroups name:\"\" "; done) && exit 0 ;;
-	  kusage) kusage && exit 0;;
+  #echo $0
+  help
+  exit $E_OPTERROR        # Exit and explain help, if no argument(s) given.
+fi
+
+if [ -z "$options" ]; then
+  case $izk in
+	  sh) eval DVTM_TERM=rxvt dvtm $(kubectl get nodes | grep -v ^NAME | cut -d " " -f 1 | while read node ; do echo -n "\"gcloud compute ssh $node\" "; done) && exit 0 ;;
+	  top) eval DVTM_TERM=rxvt dvtm $(kubectl get nodes | grep -v ^NAME | cut -d " " -f 1 | while read node ; do echo -n "\"gcloud compute ssh $node -- top\" "; done) && exit 0 ;;
+	  log) eval DVTM_TERM=rxvt dvtm $(kubectl get nodes | grep -v ^NAME | cut -d " " -f 1 | while read node ; do echo -n "\"gcloud compute ssh $node -- sudo journalctl -f -u kubelet | grep -v -e \"/stats/summary/:\" -e \"/healthz:\" -e \"Discovered runtime cgroups name:\"\" "; done) && exit 0 ;;
+	  res) kusage && exit 0 ;;
+	  cpu) kcpu && exit 0 ;;
+	  mem) kmem && exit 0 ;;
+	  img) kimages && exit 0 ;;
+	  pod) kubectl get pod --all-namespaces && exit 0 ;;
+	  *) echo "WRONG command: $izk" ; echo ; usage ; exit $E_OPTERROR ;;
   esac
-  echo $0
-  usage
-  exit $E_OPTERROR        # Exit and explain usage, if no argument(s) given.
 fi
 
 # Usage: scriptname -options
@@ -189,11 +240,11 @@ while getopts "lp:c:r:n:flh" option ; do
 	action="list"
         ;;
     h) # display this help menu
-        usage
+        help
         exit 0
         ;;
     *)
-        usage
+        help
         echo "invalid switch specified - abort." >&2
         exit 1
         ;;
@@ -203,7 +254,7 @@ done
 shift $(($OPTIND - 1))
 
 
-#[ -z "$pod" ] && usage && echo "please specify a pod name" && exit 1
+#[ -z "$pod" ] && help && echo "please specify a pod name" && exit 1
 #[ -z "$namespace" ] && namespace="default"
 [ -z "$pod" ] && pod="$1" && shift
 [ -z "$container" ] && container="$1" && shift
