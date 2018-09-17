@@ -50,7 +50,7 @@ kubemulti() {
 
 pods_get() {
 	#pods=( $(kubectl get pods | grep ^${pod} | grep -e Running -e ContainerCreating | cut -f 1 -d ' ') )
-	pods=( $(kubectl get pods $args | grep -v ^NAME | grep ^${pod} | grep -v "Evicted" | cut -f 1 -d ' ') )
+	pods=( $(kubectl get pods $args | grep -v ^NAME | grep ^${pod} | grep -v "Evicted" | grep -v "Terminating" | cut -f 1 -d ' ') )
 }
 
 print_pod_not_founds() {
@@ -203,14 +203,16 @@ fi
 
 if [ -z "$options" ]; then
   case $izk in
+	  #sh) eval DVTM_TERM=rxvt dvtm $(kubectl get nodes | grep -v ^NAME | cut -d " " -f 1 | while read node ; do echo -n "\"gcloud compute ssh $node ; read\" "; done) && exit 0 ;;
 	  sh) eval DVTM_TERM=rxvt dvtm $(kubectl get nodes | grep -v ^NAME | cut -d " " -f 1 | while read node ; do echo -n "\"gcloud compute ssh $node\" "; done) && exit 0 ;;
-	  top) eval DVTM_TERM=rxvt dvtm $(kubectl get nodes | grep -v ^NAME | cut -d " " -f 1 | while read node ; do echo -n "\"gcloud compute ssh $node -- top\" "; done) && exit 0 ;;
-	  log) eval DVTM_TERM=rxvt dvtm $(kubectl get nodes | grep -v ^NAME | cut -d " " -f 1 | while read node ; do echo -n "\"gcloud compute ssh $node -- sudo journalctl -f -u kubelet | grep -v -e \"/stats/summary/:\" -e \"/healthz:\" -e \"Discovered runtime cgroups name:\"\" "; done) && exit 0 ;;
-	  res) kusage && exit 0 ;;
+	  top) eval DVTM_TERM=rxvt dvtm $(kubectl get nodes | grep -v ^NAME | cut -d " " -f 1 | while read node ; do echo -n "\"gcloud compute ssh $node -- top ; read\" "; done) && exit 0 ;;
+	  log) eval DVTM_TERM=rxvt dvtm $(kubectl get nodes | grep -v ^NAME | cut -d " " -f 1 | while read node ; do echo -n "\"gcloud compute ssh $node -- sudo journalctl -f -u kubelet | grep -v -e '/stats/summary/:' -e '/healthz:' -e 'Discovered runtime cgroups name:' ; read\" "; done) && exit 0 ;;
+	  res) kres && exit 0 ;;
 	  cpu) kcpu && exit 0 ;;
 	  mem) kmem && exit 0 ;;
 	  img) kimages && exit 0 ;;
-	  pod) kubectl get pod --all-namespaces && exit 0 ;;
+	  pod) kubectl get pod --all-namespaces -o wide && exit 0 ;;
+	  nodes) kubectl get nodes -o wide && exit 0 ;;
 	  *) echo "WRONG command: $izk" ; echo ; usage ; exit $E_OPTERROR ;;
   esac
 fi
