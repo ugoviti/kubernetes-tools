@@ -13,6 +13,8 @@ izk="$1"
 shift
 options="$@"
 
+export TERM=xterm
+
 kubecmd() {
  local pod=$1
  case $izk in
