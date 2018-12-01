@@ -35,13 +35,12 @@ kubemulti() {
   for pod in ${pods[@]:1}; do
 	# test: list containers in a pod
 	# kubectl -n test get pods $pod -o jsonpath='{.spec.containers[*].name}' | cut -d " " -f 1
-
 	case $izk in
-		#ktop)  kubecmd+=" \; split-window \"$(kubecmd $pod)\"" ;; # tmux test
-		kbash|ktop) kubecmd+=" \"$(kubecmd $pod)\"" ;;
-		#kdesc)  kubecmd+=" -r 120 -l \"$(kubecmd $pod)\"" ;;
-		kdesc)  kubecmd+=" \"$(kubecmd $pod)\"" ;;
-		klog|ktail)  kubecmd+=" -l \"$(kubecmd $pod)\"" ;;
+		#top)  kubecmd+=" \; split-window \"$(kubecmd $pod)\"" ;; # tmux test
+		sh|top) kubecmd+=" \"$(kubecmd $pod)\"" ;;
+		#desc)  kubecmd+=" -r 120 -l \"$(kubecmd $pod)\"" ;;
+		desc)  kubecmd+=" \"$(kubecmd $pod)\"" ;;
+		log|tail)  kubecmd+=" -l \"$(kubecmd $pod)\"" ;;
 	esac
   done
   else
