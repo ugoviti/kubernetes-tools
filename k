@@ -117,10 +117,11 @@ kmem() {
 
 
 # not working
-kimages() {
+kimg() {
 	#kubectl get pods --all-namespaces -o jsonpath="{..image}" |tr -s '[[:space:]]' '\n' | sort | uniq -c | sort -k2
 	#kubectl get pods --all-namespaces -o jsonpath='{range .items[*]}{"\n"}{.metadata.name}{":\t"}{range .spec.containers[*]}{.image}{", "}{end}{end}' |sort | column -c1 -t | sort -k2
-	kubectl get pods --all-namespaces -o go-template --template="{{range .items}}{{.metadata.name}} {{.metadata.namespace}} {{range .spec.containers}}{{.image}} {{end}};{{end}}" | tr -s ';' '\n' | grep -v kube-system | column -c1 -t | sort -k3
+	#kubectl get pods --all-namespaces -o go-template --template="{{range .items}}{{.metadata.name}} {{.metadata.namespace}} {{range .spec.containers}}{{.image}} {{end}};{{end}}" | tr -s ';' '\n' | grep -v kube-system | column -c1 -t | sort -k3
+	kubectl get pods --all-namespaces -o go-template --template="{{range .items}}{{.metadata.name}} {{.metadata.namespace}} {{range .spec.containers}}{{.image}} {{end}};{{end}}" | tr -s ';' '\n' | column -c1 -t | sort -k3
 }
 
 
@@ -211,7 +212,7 @@ if [ -z "$options" ]; then
 	  res) kres && exit 0 ;;
 	  cpu) kcpu && exit 0 ;;
 	  mem) kmem && exit 0 ;;
-	  img) kimages && exit 0 ;;
+	  img) kimg && exit 0 ;;
 	  pod) kubectl get pod --all-namespaces -o wide && exit 0 ;;
 	  nodes) kubectl get nodes -o wide && exit 0 ;;
 	  *) echo "WRONG command: $izk" ; echo ; usage ; exit $E_OPTERROR ;;
